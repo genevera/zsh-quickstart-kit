@@ -20,24 +20,8 @@ setopt correct
 # turn off the infernal correctall for filenames
 unsetopt correctall
 
-# Base PATH
-PATH=/usr/local/bin:/usr/local/sbin:/sbin:/usr/sbin:/bin:/usr/bin
+source ${HOME}/.path_candidates
 
-# Conditional PATH additions
-for path_candidate in /opt/local/sbin \
-  /Applications/Xcode.app/Contents/Developer/usr/bin \
-  /opt/local/bin \
-  /usr/local/share/npm/bin \
-  ~/.cabal/bin \
-  ~/.cargo/bin \
-  ~/.rbenv/bin \
-  ~/bin \
-  ~/src/gocode/bin
-do
-  if [ -d ${path_candidate} ]; then
-    export PATH=${PATH}:${path_candidate}
-  fi
-done
 
 # Yes, these are a pain to customize. Fortunately, Geoff Greer made an online
 # tool that makes it easy to customize your color scheme and keep them in sync
@@ -46,26 +30,7 @@ done
 export LSCOLORS='Exfxcxdxbxegedabagacad'
 export LS_COLORS='di=1;34;40:ln=35;40:so=32;40:pi=33;40:ex=31;40:bd=34;46:cd=34;43:su=0;41:sg=0;46:tw=0;42:ow=0;43:'
 
-# Fun with SSH
-if [ $(ssh-add -l | grep -c "The agent has no identities." ) -eq 1 ]; then
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    # We're on OS X. Try to load ssh keys using pass phrases stored in
-    # the OSX keychain.
-    #
-    # You can use ssh-add -K /path/to/key to store pass phrases into
-    # the OSX keychain
-    ssh-add -k
-  fi
-fi
-
-for key_candidate in rsa dsa ecdsa
-do
-  if [ -f ~/.ssh/id_${key_candidate} -a $(ssh-add -l | grep -c ".ssh/id_${key_candidate}" ) -eq 0 ]; then
-    ssh-add ~/.ssh/id_${key_candidate}
-  fi
-done
-
-# Now that we have $PATH set up and ssh keys loaded, configure zgen.
+zstyle ':omz:plugins:ssh-agent' agent-forwarding on
 
 # start zgen
 if [ -f ~/.zgen-setup ]; then
@@ -75,6 +40,7 @@ fi
 
 # set some history options
 setopt append_history
+
 setopt extended_history
 setopt hist_expire_dups_first
 setopt hist_ignore_all_dups
@@ -88,9 +54,22 @@ setopt hist_verify
 setopt share_history
 #setopt noclobber
 
-# set some more options
+# set some pushd options
+setopt auto_pushd
 setopt pushd_ignore_dups
-#setopt pushd_silent
+setopt pushd_silent
+setopt pushd_to_home
+
+# completion options
+setopt auto_list
+setopt auto_menu
+setopt auto_param_keys
+setopt complete_aliases
+setopt list_ambiguous
+setopt list_types
+setopt long_list_jobs
+
+
 
 # Keep a ton of history.
 HISTSIZE=100000
@@ -105,6 +84,7 @@ TIMEFMT="%U user %S system %P cpu %*Es total"
 
 # How often to check for an update. If you want to override this, the
 # easiest way is to add a script fragment in ~/.zshrc.d that unsets
+
 # QUICKSTART_KIT_REFRESH_IN_DAYS.
 QUICKSTART_KIT_REFRESH_IN_DAYS=7
 
@@ -123,21 +103,6 @@ bindkey " " globalias
 bindkey "^ " magic-space           # control-space to bypass completion
 bindkey -M isearch " " magic-space # normal space during searches
 
-# Customize to your needs...
-# Stuff that works on bash or zsh
-if [ -r ~/.sh_aliases ]; then
-  source ~/.sh_aliases
-fi
-
-# Stuff only tested on zsh, or explicitly zsh-specific
-if [ -r ~/.zsh_aliases ]; then
-  source ~/.zsh_aliases
-fi
-
-if [ -r ~/.zsh_functions ]; then
-  source ~/.zsh_functions
-fi
-
 export LOCATE_PATH=/var/db/locate.database
 
 # Load AWS credentials
@@ -148,39 +113,6 @@ fi
 # JAVA setup - needed for iam-* tools
 if [ -d /Library/Java/Home ];then
   export JAVA_HOME=/Library/Java/Home
-fi
-
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  # We're on osx
-  [ -f ~/.osx_aliases ] && source ~/.osx_aliases
-  if [ -d ~/.osx_aliases.d ]; then
-    for alias_file in ~/.osx_aliases.d/*
-    do
-      source $alias_file
-    done
-  fi
-fi
-
-# deal with screen, if we're using it - courtesy MacOSXHints.com
-# Login greeting ------------------
-if [ "$TERM" = "screen" -a ! "$SHOWED_SCREEN_MESSAGE" = "true" ]; then
-  detached_screens=$(screen -list | grep Detached)
-  if [ ! -z "$detached_screens" ]; then
-    echo "+---------------------------------------+"
-    echo "| Detached screens are available:       |"
-    echo "$detached_screens"
-    echo "+---------------------------------------+"
-  fi
-fi
-
-if [ -f /usr/local/etc/grc.bashrc ]; then
-  source "$(brew --prefix)/etc/grc.bashrc"
-
-  function ping5(){
-    grc --color=auto ping -c 5 "$@"
-  }
-else
-  alias ping5='ping -c 5'
 fi
 
 # Speed up autocomplete, force prefix mapping
@@ -195,24 +127,17 @@ if [ -d ~/.zsh-completions ]; then
   do
     source "$completion"
   done
+
 fi
 
-echo
-echo "Current SSH Keys:"
-ssh-add -l
-echo
-
-# Honor old .zshrc.local customizations, but print deprecation warning.
-if [ -f ~/.zshrc.local ]; then
-  source ~/.zshrc.local
-  echo ".zshrc.local is deprecated - use files in ~/.zshrc.d instead"
-fi
+# echo "Current SSH Keys:"
+# ssh-add -l
 
 # Make it easy to append your own customizations that override the above by
 # loading all files from .zshrc.d directory
-mkdir -p ~/.zshrc.d
+[[ ! -d ${HOME}/.zshrc.d ]] && mkdir -p ~/.zshrc.d
 
-if [ -n "$(/bin/ls ~/.zshrc.d)" ]; then
+if [ -d "${HOME}/.zshrc.d" ]; then
   for dotfile in ~/.zshrc.d/*
   do
     if [ -r "${dotfile}" ]; then
@@ -240,11 +165,8 @@ dedupe_path() {
   export PATH=${(j+:+)result}
 }
 
+# ZSH_THEME="base16_dracula"
 dedupe_path
-
-# If desk is installed, load the Hook for desk activation
-[[ -n "$DESK_ENV" ]] && source "$DESK_ENV"
-
 # Do selfupdate checking. We do this after processing ~/.zshrc.d to make the
 # refresh check interval easier to customize.
 #
@@ -255,10 +177,11 @@ _load-lastupdate-from-file() {
   local now=$(date +%s)
   if [[ -f "${1}" ]]; then
     local last_update=$(cat "${1}")
+
   else
     local last_update=0
   fi
-  local interval="$(expr ${now} - ${last_update})"
+  local interval="$(( ${now} - ${last_update} ))"
   echo "${interval}"
 }
 
@@ -287,13 +210,14 @@ _update-zsh-quickstart() {
 }
 
 
+
 _check-for-zsh-quickstart-update() {
-  local day_seconds=$(expr 24 \* 60 \* 60)
-  local refresh_seconds=$(expr "${day_seconds}" \* "${QUICKSTART_KIT_REFRESH_IN_DAYS}")
+  local day_seconds=$(( 24 * 60 * 60))
+  local refresh_seconds=$(( ${day_seconds} * ${QUICKSTART_KIT_REFRESH_IN_DAYS:-7} ))
   local last_quickstart_update=$(_load-lastupdate-from-file ~/.zsh-quickstart-last-update)
 
   if [ ${last_quickstart_update} -gt ${refresh_seconds} ]; then
-    echo "It has been $(expr ${last_quickstart_update} / ${day_seconds}) days since your zsh quickstart kit was updated"
+    echo "It has been $(( ${last_quickstart_update} / ${day_seconds} )) days since your zsh quickstart kit was updated"
     echo "Checking for zsh-quickstart-kit updates..."
     _update-zsh-quickstart
   fi
